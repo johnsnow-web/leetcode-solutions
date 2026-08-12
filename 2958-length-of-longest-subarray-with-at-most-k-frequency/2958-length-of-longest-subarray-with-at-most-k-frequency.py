@@ -11,8 +11,8 @@ class Solution:
             # Shrink window if any element exceeds frequency k
             while freq[nums[right]] > k:
                 freq[nums[left]] -= 1
-                if freq[nums[left]] == 0:
-                    del freq[nums[left]]
+                # if freq[nums[left]] == 0:
+                #     del freq[nums[left]]
                 left += 1
             
             # Update maximum length
