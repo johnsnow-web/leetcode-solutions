@@ -1,5 +1,23 @@
+
+    
 class Solution:
     def largestInteger(self, nums: list[int], k: int) -> int:
+        n = len(nums)
+        value_count = {}
+        
+        # Process each subarray of size k
+        for i in range(n - k + 1):
+            # Get unique values in current subarray
+            for val in set(nums[i:i+k]):
+                value_count[val] = value_count.get(val, 0) + 1
+        
+        # Find the largest value with count == 1
+        result = -1
+        for val, count in value_count.items():
+            if count == 1:
+                result = max(result, val)
+        
+        return result
         n = len(nums)
         
         # Get all unique values
