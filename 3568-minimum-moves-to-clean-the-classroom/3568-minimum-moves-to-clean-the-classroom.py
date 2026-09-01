@@ -1,92 +1,163 @@
+from collections import deque
+from typing import List
+
+
 class Solution:
     def minMoves(self, classroom: List[str], energy: int) -> int:
-        m, n = len(classroom), len(classroom[0])
+        m = len(classroom)
+        n = len(classroom[0])
+        N = m * n
 
-        # Number each litter cell from 0 .. k-1
-        litter_id = {}
-        start = None
+        start = 0
+        litter = [-1] * N
+        litter_count = 0
+        reset = bytearray(N)
+        blocked = bytearray(N)
 
+        # Encode the grid once.
         for r in range(m):
-            for c in range(n):
-                ch = classroom[r][c]
+            row = classroom[r]
+            base = r * n
+
+            for c, ch in enumerate(row):
+                p = base + c
+
                 if ch == 'S':
-                    start = (r, c)
+                    start = p
                 elif ch == 'L':
-                    litter_id[(r, c)] = len(litter_id)
+                    litter[p] = litter_count
+                    litter_count += 1
+                elif ch == 'R':
+                    reset[p] = 1
+                elif ch == 'X':
+                    blocked[p] = 1
 
-        k = len(litter_id)
-
-        # No litter to collect.
-        if k == 0:
+        # Nothing to collect.
+        if litter_count == 0:
             return 0
 
-        target = (1 << k) - 1
+        full_mask = (1 << litter_count) - 1
 
-        # best[(cell, mask)] = maximum remaining energy reached.
+        # best[state] = maximum remaining energy seen for
+        # (position, mask).
         #
-        # Encode (r, c) as r*n+c to reduce tuple overhead.
-        states = m * n
-        best = {}
+        # Store energy + 1:
+        #   0 -> never visited
+        #   1 -> 0 energy
+        #   2 -> 1 energy
+        #   ...
+        #
+        # Maximum value is 51, so bytearray is sufficient.
+        total_states = N * (1 << litter_count)
+        best = bytearray(total_states)
 
-        sr, sc = start
-        start_pos = sr * n + sc
-        start_mask = 0
+        start_state = start
+        best[start] = energy + 1
 
-        # (position, remaining_energy, mask)
-        q = deque([(start_pos, energy, start_mask)])
-        best[(start_pos, start_mask)] = energy
-
-        directions = ((1, 0), (-1, 0), (0, 1), (0, -1))
+        # Queue entries:
+        # (position, mask, remaining_energy)
+        q = deque([(start, 0, energy)])
 
         moves = 0
 
         while q:
-            # BFS layer = same number of moves
+            # Process one BFS level.
             for _ in range(len(q)):
-                pos, rem, mask = q.popleft()
+                pos, mask, rem = q.popleft()
 
-                if mask == target:
+                if mask == full_mask:
                     return moves
 
-                r, c = divmod(pos, n)
+                # If no energy remains, this state cannot move.
+                if rem == 0:
+                    continue
 
-                for dr, dc in directions:
-                    nr, nc = r + dr, c + dc
+                r = pos // n
+                c = pos - r * n
 
-                    if not (0 <= nr < m and 0 <= nc < n):
-                        continue
+                # ---- Up ----
+                if r:
+                    np = pos - n
 
-                    if classroom[nr][nc] == 'X':
-                        continue
+                    if not blocked[np]:
+                        new_rem = rem - 1
+                        new_mask = mask
 
-                    # A move always costs 1 energy.
-                    if rem == 0:
-                        continue
+                        lid = litter[np]
+                        if lid >= 0:
+                            new_mask |= 1 << lid
 
-                    new_rem = rem - 1
-                    new_pos = nr * n + nc
+                        if reset[np]:
+                            new_rem = energy
 
-                    # Collect litter.
-                    new_mask = mask
-                    lid = litter_id.get((nr, nc))
-                    if lid is not None:
-                        new_mask |= 1 << lid
+                        idx = new_mask * N + np
 
-                    # Reset immediately upon entering R.
-                    if classroom[nr][nc] == 'R':
-                        new_rem = energy
+                        if new_rem + 1 > best[idx]:
+                            best[idx] = new_rem + 1
+                            q.append((np, new_mask, new_rem))
 
-                    key = (new_pos, new_mask)
+                # ---- Down ----
+                if r + 1 < m:
+                    np = pos + n
 
-                    # Dominance:
-                    # If we've already reached this cell/mask with
-                    # at least as much energy, this state cannot help.
-                    old = best.get(key, -1)
-                    if new_rem <= old:
-                        continue
+                    if not blocked[np]:
+                        new_rem = rem - 1
+                        new_mask = mask
 
-                    best[key] = new_rem
-                    q.append((new_pos, new_rem, new_mask))
+                        lid = litter[np]
+                        if lid >= 0:
+                            new_mask |= 1 << lid
+
+                        if reset[np]:
+                            new_rem = energy
+
+                        idx = new_mask * N + np
+
+                        if new_rem + 1 > best[idx]:
+                            best[idx] = new_rem + 1
+                            q.append((np, new_mask, new_rem))
+
+                # ---- Left ----
+                if c:
+                    np = pos - 1
+
+                    if not blocked[np]:
+                        new_rem = rem - 1
+                        new_mask = mask
+
+                        lid = litter[np]
+                        if lid >= 0:
+                            new_mask |= 1 << lid
+
+                        if reset[np]:
+                            new_rem = energy
+
+                        idx = new_mask * N + np
+
+                        if new_rem + 1 > best[idx]:
+                            best[idx] = new_rem + 1
+                            q.append((np, new_mask, new_rem))
+
+                # ---- Right ----
+                if c + 1 < n:
+                    np = pos + 1
+
+                    if not blocked[np]:
+                        new_rem = rem - 1
+                        new_mask = mask
+
+                        lid = litter[np]
+                        if lid >= 0:
+                            new_mask |= 1 << lid
+
+                        if reset[np]:
+                            new_rem = energy
+
+                        idx = new_mask * N + np
+
+                        if new_rem + 1 > best[idx]:
+                            best[idx] = new_rem + 1
+                            q.append((np, new_mask, new_rem))
 
             moves += 1
 
